@@ -65,7 +65,7 @@ PRESETS = {
         "w2_start": 19, "w2_end": 2,  "w2_rate": 25.60,
         "w3_start": 2,  "w3_end": 5,  "w3_rate": 25.60,
         "w4_start": 5,  "w4_end": 16, "w4_rate": 25.60,
-        "comp_sc": 45.54,
+        "comp_sc": 57.23,
     },
     "EV / Intelligent Night (00-05 @ 7p)": {
         "w1_start": 16, "w1_end": 19, "w1_rate": 24.50,
@@ -101,7 +101,7 @@ def init_state():
         "use_exact_pdf": True,
         "base_pre_apr": 25.60,
         "base_post_apr": 25.60,
-        "base_sc": 45.54,
+        "base_sc": 57.23,
         "shift_w1_pct": 0.0,
         "shift_w4_pct": 0.0,
     }
@@ -123,7 +123,7 @@ def reset_all_callback():
     st.session_state["use_exact_pdf"] = True
     st.session_state["base_pre_apr"] = 25.60
     st.session_state["base_post_apr"] = 25.60
-    st.session_state["base_sc"] = 45.54
+    st.session_state["base_sc"] = 57.23
     st.session_state["shift_w1_pct"] = 0.0
     st.session_state["shift_w4_pct"] = 0.0
     apply_preset_callback()
