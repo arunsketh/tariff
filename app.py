@@ -21,16 +21,19 @@ st.set_page_config(
 # ==============================================================================
 # RECONCILED JAN-SEP 2026 DATA (UK LOCAL TIME, CALIBRATED TO FUSE PDF ACTUALS)
 # ==============================================================================
-MONTHS = [
+MONTHS_9M = [
     "2026-01", "2026-02", "2026-03",
     "2026-04", "2026-05", "2026-06",
     "2026-07", "2026-08", "2026-09",
 ]
 
+MONTHS_12M = MONTHS_9M + ["2026-10", "2026-11", "2026-12"]
+
 MONTHLY_DAYS = {
     "2026-01": 31, "2026-02": 28, "2026-03": 31,
     "2026-04": 30, "2026-05": 31, "2026-06": 30,
     "2026-07": 31, "2026-08": 31, "2026-09": 30,
+    "2026-10": 31, "2026-11": 30, "2026-12": 31,
 }
 
 ACTUAL_FUSE_PDF_BILLS = {
@@ -40,7 +43,7 @@ ACTUAL_FUSE_PDF_BILLS = {
 }
 
 # Reconciled hourly kWh per month (index 0 = 00:00-00:59 ... 23 = 23:00-23:59)
-HOURLY_KWH = {
+HOURLY_KWH_ACTUAL = {
     "2026-01": [8.998914, 6.064524, 5.369339, 5.586804, 7.037991, 8.740045, 6.753383, 25.678460, 34.462891, 28.726684, 28.202094, 28.046274, 29.610790, 23.698063, 22.626881, 21.503383, 19.978975, 25.405365, 47.117465, 39.771429, 35.560670, 35.538786, 57.953541, 35.829250],
     "2026-02": [7.053538, 5.397071, 5.206652, 4.685480, 6.664602, 7.992980, 5.964678, 23.875332, 32.546988, 27.188891, 27.157100, 33.559604, 30.523105, 22.205886, 23.679519, 21.457613, 19.075596, 24.403374, 47.996867, 38.315752, 30.276669, 32.058221, 52.426234, 39.941248],
     "2026-03": [7.673617, 4.923561, 4.467814, 5.266730, 6.101850, 7.022381, 6.528047, 21.019933, 25.367220, 23.256216, 21.901488, 23.028506, 26.447706, 19.554423, 18.730862, 16.605177, 15.899430, 20.647558, 36.760567, 37.026835, 27.032516, 27.824058, 46.438304, 27.583199],
@@ -51,6 +54,17 @@ HOURLY_KWH = {
     "2026-08": [7.932516, 7.118017, 6.534412, 6.221984, 8.588869, 10.722592, 7.296610, 14.120653, 17.981821, 15.223587, 15.076381, 17.619577, 17.494601, 14.253104, 12.099689, 12.491632, 11.388241, 14.519799, 25.195580, 19.924513, 17.848094, 16.962715, 28.377545, 19.012466],
     "2026-09": [9.072528, 7.532155, 7.125792, 6.854285, 9.706260, 11.690400, 10.142581, 14.331206, 19.348331, 15.653125, 13.347523, 16.637601, 16.110140, 11.565803, 12.294550, 11.265067, 10.538130, 13.314547, 21.267735, 19.624304, 14.720404, 15.009928, 29.058287, 18.270319],
 }
+
+# Build Q4 (Oct-Dec) winter seasonal hourly profile from Q1 (Jan-Mar) daily average
+_q1_days = MONTHLY_DAYS["2026-01"] + MONTHLY_DAYS["2026-02"] + MONTHLY_DAYS["2026-03"]  # 90 days
+_q1_daily_hourly = [
+    sum(HOURLY_KWH_ACTUAL[m][h] for m in ["2026-01", "2026-02", "2026-03"]) / _q1_days
+    for h in range(24)
+]
+
+HOURLY_KWH = dict(HOURLY_KWH_ACTUAL)
+for _proj_m in ["2026-10", "2026-11", "2026-12"]:
+    HOURLY_KWH[_proj_m] = [v * MONTHLY_DAYS[_proj_m] for v in _q1_daily_hourly]
 
 PRESETS = {
     "Octopus 3-Tier (Screenshot)": {
@@ -98,7 +112,8 @@ def hours_in_window(start_h: int, end_h: int) -> list[int]:
 def init_state():
     defaults = {
         "preset_name": "Octopus 3-Tier (Screenshot)",
-        "use_exact_pdf": True,
+        "horizon_mode": "12-Month Full Year (Jan–Dec)",
+        "use_exact_pdf": False,
         "base_pre_apr": 25.60,
         "base_post_apr": 25.60,
         "base_sc": 57.23,
@@ -120,7 +135,8 @@ def apply_preset_callback():
 
 def reset_all_callback():
     st.session_state["preset_name"] = "Octopus 3-Tier (Screenshot)"
-    st.session_state["use_exact_pdf"] = True
+    st.session_state["horizon_mode"] = "12-Month Full Year (Jan–Dec)"
+    st.session_state["use_exact_pdf"] = False
     st.session_state["base_pre_apr"] = 25.60
     st.session_state["base_post_apr"] = 25.60
     st.session_state["base_sc"] = 57.23
@@ -137,9 +153,17 @@ init_state()
 with st.sidebar:
     st.title("⚡ Tariff Controls")
 
+    st.subheader("0. Analysis Period")
+    st.radio(
+        "Billing Horizon",
+        options=["12-Month Full Year (Jan–Dec)", "9-Month Actuals (Jan–Sep)"],
+        key="horizon_mode",
+    )
+
+    st.divider()
     st.subheader("1. Baseline Tariff (Fuse Energy)")
     st.checkbox(
-        "Lock to exact Fuse PDF bills (£922.19)",
+        "Lock Jan–Sep to exact Fuse PDF bills (£922.19)",
         key="use_exact_pdf",
     )
     b_col1, b_col2 = st.columns(2)
@@ -155,13 +179,12 @@ with st.sidebar:
         )
     with b_col2:
         st.number_input(
-            "Apr–Sep (p/kWh)",
+            "Apr–Dec (p/kWh)",
             min_value=0.0,
             max_value=200.0,
             step=0.01,
             format="%.2f",
             key="base_post_apr",
-            disabled=st.session_state["use_exact_pdf"],
         )
     st.number_input(
         "Baseline Standing Charge (p/day)",
@@ -170,7 +193,6 @@ with st.sidebar:
         step=0.01,
         format="%.2f",
         key="base_sc",
-        disabled=st.session_state["use_exact_pdf"],
     )
 
     st.divider()
@@ -234,6 +256,10 @@ with st.sidebar:
 # ==============================================================================
 # CORE CALCULATION ENGINE
 # ==============================================================================
+is_12m = st.session_state["horizon_mode"].startswith("12-Month")
+ACTIVE_MONTHS = MONTHS_12M if is_12m else MONTHS_9M
+num_months = len(ACTIVE_MONTHS)
+
 r1 = st.session_state["w1_rate"] / 100.0
 r2 = st.session_state["w2_rate"] / 100.0
 r3 = st.session_state["w3_rate"] / 100.0
@@ -248,10 +274,11 @@ s1_frac = st.session_state["shift_w1_pct"] / 100.0
 s4_frac = st.session_state["shift_w4_pct"] / 100.0
 
 records = []
-for m in MONTHS:
+for m in ACTIVE_MONTHS:
     hrs = HOURLY_KWH[m]
     days = MONTHLY_DAYS[m]
     tot_kwh = sum(hrs)
+    is_projected = m > "2026-09"
 
     k1_raw = sum(hrs[h] for h in w1_h)
     k2_raw = sum(hrs[h] for h in w2_h)
@@ -270,7 +297,7 @@ for m in MONTHS:
     sc_cost = days * sc_comp
     comp_bill = c1 + c2 + c3 + c4 + sc_cost
 
-    if st.session_state["use_exact_pdf"]:
+    if st.session_state["use_exact_pdf"] and m in ACTUAL_FUSE_PDF_BILLS:
         base_bill = ACTUAL_FUSE_PDF_BILLS[m]
     else:
         b_rate = b_pre if m <= "2026-03" else b_post
@@ -278,7 +305,7 @@ for m in MONTHS:
 
     diff = comp_bill - base_bill
     records.append({
-        "Month": m,
+        "Month": f"{m} (Est.)" if is_projected else m,
         "Days": days,
         "Total_kWh": tot_kwh,
         "W1_kWh": k1,
@@ -304,9 +331,16 @@ df = pd.DataFrame(records)
 
 tot_days = int(df["Days"].sum())
 tot_kwh = df["Total_kWh"].sum()
+avg_monthly_kwh = tot_kwh / num_months
+
 tot_base = df["Baseline_Bill"].sum()
+avg_monthly_base = tot_base / num_months
+
 tot_comp = df["New_Bill"].sum()
+avg_monthly_comp = tot_comp / num_months
+
 tot_diff = tot_comp - tot_base
+avg_monthly_diff = tot_diff / num_months
 tot_diff_pct = (tot_diff / tot_base * 100.0) if tot_base else 0.0
 
 tot_usage_cost = df[["W1_Cost", "W2_Cost", "W3_Cost", "W4_Cost"]].sum().sum()
@@ -319,37 +353,54 @@ base_blended_p = (base_usage_cost / tot_kwh * 100.0) if tot_kwh else 0.0
 # MAIN DASHBOARD UI
 # ==============================================================================
 st.title("UK Electricity Time-of-Use Tariff Comparator")
-st.caption("Reconciled Jan–Sep 2026 Smart Meter + Fuse Energy PDF Actuals (3,902.262 kWh | 273 Days | Europe/London)")
+if is_12m:
+    st.caption(
+        f"12-Month Full Year (Jan–Sep Actuals + Oct–Dec Winter Projection) | "
+        f"{tot_kwh:,.2f} kWh/yr ({avg_monthly_kwh:,.1f} kWh/mo) | {tot_days} Days | Europe/London"
+    )
+else:
+    st.caption(
+        f"9-Month Actuals (Jan–Sep 2026 Smart Meter) | "
+        f"{tot_kwh:,.2f} kWh ({avg_monthly_kwh:,.1f} kWh/mo) | {tot_days} Days | Europe/London"
+    )
 
 # KPI Metrics Row
-k_col1, k_col2, k_col3, k_col4, k_col5 = st.columns(5)
+k_col1, k_col2, k_col3, k_col4, k_col5, k_col6 = st.columns(6)
 
 with k_col1:
     st.metric(
-        label="9-Month Baseline Bill",
-        value=f"£{tot_base:,.2f}",
-        delta=f"Avg £{tot_base / 9:.2f}/mo ({base_blended_p:.2f}p/kWh)",
+        label=f"{num_months}-Mo Consumption",
+        value=f"{tot_kwh:,.0f} kWh",
+        delta=f"Avg {avg_monthly_kwh:,.1f} kWh/mo",
         delta_color="off",
     )
 
 with k_col2:
     st.metric(
-        label="Comparison Tariff Bill",
-        value=f"£{tot_comp:,.2f}",
-        delta=f"Avg £{tot_comp / 9:.2f}/mo (SC £{df['Standing_Charge'].sum():.2f})",
+        label=f"{num_months}-Mo Baseline Bill",
+        value=f"£{tot_base:,.2f}",
+        delta=f"Avg £{avg_monthly_base:.2f}/mo ({base_blended_p:.2f}p)",
         delta_color="off",
     )
 
 with k_col3:
-    sign = "+" if tot_diff > 0 else ""
     st.metric(
-        label="Net Difference",
-        value=f"{sign}£{tot_diff:,.2f}",
-        delta=f"{sign}{tot_diff_pct:.2f}% vs. baseline",
-        delta_color="inverse",
+        label=f"{num_months}-Mo Comparison Bill",
+        value=f"£{tot_comp:,.2f}",
+        delta=f"Avg £{avg_monthly_comp:.2f}/mo",
+        delta_color="off",
     )
 
 with k_col4:
+    sign = "+" if tot_diff > 0 else ""
+    st.metric(
+        label=f"{num_months}-Mo Net Difference",
+        value=f"{sign}£{tot_diff:,.2f}",
+        delta=f"{sign}£{avg_monthly_diff:.2f}/mo ({sign}{tot_diff_pct:.2f}%)",
+        delta_color="inverse",
+    )
+
+with k_col5:
     st.metric(
         label="Effective Blended Rate",
         value=f"{blended_p:.2f}p/kWh",
@@ -357,18 +408,19 @@ with k_col4:
         delta_color="inverse",
     )
 
-with k_col5:
+with k_col6:
     tot_w1_kwh = df["W1_kWh"].sum()
     spread = r1 - r3
     if tot_diff <= 0:
         st.metric("Break-Even Shift", "0 kWh", delta="Already cheaper than baseline", delta_color="normal")
     elif spread > 0:
         req_kwh = tot_diff / spread
+        req_mo_kwh = req_kwh / num_months
         req_pct = (req_kwh / tot_w1_kwh * 100.0) if tot_w1_kwh > 0 else 999.0
         st.metric(
             label="Break-Even Shift (W1→W3)",
             value=f"{req_kwh:,.0f} kWh",
-            delta=f"{req_pct:.1f}% of W1 Peak ({tot_w1_kwh:.0f} kWh)",
+            delta=f"{req_mo_kwh:.1f} kWh/mo ({req_pct:.1f}% of W1)",
             delta_color="off",
         )
     else:
@@ -417,7 +469,8 @@ with tab_bill:
         st.bar_chart(chart_df, height=340)
 
 with tab_hourly:
-    hourly_totals = [sum(HOURLY_KWH[m][h] for m in MONTHS) for h in range(24)]
+    hourly_totals = [sum(HOURLY_KWH[m][h] for m in ACTIVE_MONTHS) for h in range(24)]
+    hourly_monthly_avg = [v / num_months for v in hourly_totals]
     hour_labels = [f"{h:02d}:00" for h in range(24)]
     win_names = []
     win_colors = []
@@ -443,13 +496,19 @@ with tab_hourly:
             go.Bar(
                 x=hour_labels,
                 y=hourly_totals,
+                customdata=hourly_monthly_avg,
                 marker_color=win_colors,
                 text=win_names,
-                hovertemplate="<b>%{x}</b><br>9-Month Usage: %{y:.2f} kWh<br>Window: %{text}<extra></extra>",
+                hovertemplate=(
+                    "<b>%{x}</b><br>"
+                    f"{num_months}-Mo Total: %{{y:.2f}} kWh<br>"
+                    "Avg/Month: %{customdata:.2f} kWh<br>"
+                    "Window: %{text}<extra></extra>"
+                ),
             )
         )
         fig_hr.update_layout(
-            yaxis_title="9-Month Total Consumption (kWh)",
+            yaxis_title=f"{num_months}-Month Total Consumption (kWh)",
             xaxis_title="Local Hour (Europe/London)",
             height=360,
             margin=dict(l=20, r=20, t=25, b=20),
@@ -474,9 +533,33 @@ w2_tag = f"W2 ({int(st.session_state['w2_start']):02d}-{int(st.session_state['w2
 w3_tag = f"W3 ({int(st.session_state['w3_start']):02d}-{int(st.session_state['w3_end']):02d})"
 w4_tag = f"W4 ({int(st.session_state['w4_start']):02d}-{int(st.session_state['w4_end']):02d})"
 
-# Build summary row
+# Build Monthly Average & Total summary rows
+avg_row = pd.DataFrame([{
+    "Month": "MONTHLY AVG",
+    "Days": round(tot_days / num_months, 1),
+    "Total_kWh": avg_monthly_kwh,
+    "W1_kWh": df["W1_kWh"].sum() / num_months,
+    "W2_kWh": df["W2_kWh"].sum() / num_months,
+    "W3_kWh": df["W3_kWh"].sum() / num_months,
+    "W4_kWh": df["W4_kWh"].sum() / num_months,
+    "W1_Pct": (df["W1_kWh"].sum() / tot_kwh * 100.0),
+    "W2_Pct": (df["W2_kWh"].sum() / tot_kwh * 100.0),
+    "W3_Pct": (df["W3_kWh"].sum() / tot_kwh * 100.0),
+    "W4_Pct": (df["W4_kWh"].sum() / tot_kwh * 100.0),
+    "W1_Cost": df["W1_Cost"].sum() / num_months,
+    "W2_Cost": df["W2_Cost"].sum() / num_months,
+    "W3_Cost": df["W3_Cost"].sum() / num_months,
+    "W4_Cost": df["W4_Cost"].sum() / num_months,
+    "Standing_Charge": df["Standing_Charge"].sum() / num_months,
+    "New_Bill": avg_monthly_comp,
+    "Baseline_Bill": avg_monthly_base,
+    "Diff_GBP": avg_monthly_diff,
+    "Diff_Pct": tot_diff_pct,
+}])
+
+total_label = f"TOTAL ({num_months} MO)"
 summary_row = pd.DataFrame([{
-    "Month": "TOTAL",
+    "Month": total_label,
     "Days": tot_days,
     "Total_kWh": tot_kwh,
     "W1_kWh": df["W1_kWh"].sum(),
@@ -498,7 +581,7 @@ summary_row = pd.DataFrame([{
     "Diff_Pct": tot_diff_pct,
 }])
 
-full_df = pd.concat([df, summary_row], ignore_index=True)
+full_df = pd.concat([df, avg_row, summary_row], ignore_index=True)
 
 if table_view == "Cost Breakdown (£)":
     disp_df = full_df[[
@@ -518,6 +601,7 @@ if table_view == "Cost Breakdown (£)":
         "Diff_Pct": "Diff (%)",
     })
     fmt = {
+        "Days": "{:.1f}",
         "Total kWh": "{:.2f}",
         f"{w1_tag} (£)": "£{:.2f}",
         f"{w2_tag} (£)": "£{:.2f}",
@@ -545,6 +629,7 @@ elif table_view == "Consumption Share (%)":
         "Diff_GBP": "Diff (£)",
     })
     fmt = {
+        "Days": "{:.1f}",
         "Total kWh": "{:.2f}",
         f"{w1_tag} (%)": "{:.2f}%",
         f"{w2_tag} (%)": "{:.2f}%",
@@ -570,6 +655,7 @@ elif table_view == "Consumption Volume (kWh)":
         "Diff_GBP": "Diff (£)",
     })
     fmt = {
+        "Days": "{:.1f}",
         "Total kWh": "{:.2f}",
         f"{w1_tag} (kWh)": "{:.2f}",
         f"{w2_tag} (kWh)": "{:.2f}",
@@ -581,13 +667,14 @@ elif table_view == "Consumption Volume (kWh)":
     }
 else:
     disp_df = full_df.copy()
-    fmt = {col: "{:.2f}" for col in disp_df.columns if col not in ("Month", "Days")}
+    fmt = {col: "{:.2f}" for col in disp_df.columns if col != "Month"}
+    fmt["Days"] = "{:.1f}"
 
 st.dataframe(
     disp_df.style.format(fmt),
     use_container_width=True,
     hide_index=True,
-    height=390,
+    height=495 if is_12m else 425,
 )
 
 # CSV Export Button
@@ -597,7 +684,7 @@ with t_col2:
     st.download_button(
         label="⬇️ Download Full CSV",
         data=csv_buffer.getvalue(),
-        file_name="tariff_comparison_2026.csv",
+        file_name=f"tariff_comparison_{num_months}mo_2026.csv",
         mime="text/csv",
         use_container_width=True,
     )
