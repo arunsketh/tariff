@@ -61,10 +61,10 @@ PRESETS = {
         "comp_sc": 57.23,
     },
     "Fuse Single Rate Fixed (Apr+)": {
-        "w1_start": 16, "w1_end": 19, "w1_rate": 19.38,
-        "w2_start": 19, "w2_end": 2,  "w2_rate": 19.38,
-        "w3_start": 2,  "w3_end": 5,  "w3_rate": 19.38,
-        "w4_start": 5,  "w4_end": 16, "w4_rate": 19.38,
+        "w1_start": 16, "w1_end": 19, "w1_rate": 25.60,
+        "w2_start": 19, "w2_end": 2,  "w2_rate": 25.60,
+        "w3_start": 2,  "w3_end": 5,  "w3_rate": 25.60,
+        "w4_start": 5,  "w4_end": 16, "w4_rate": 25.60,
         "comp_sc": 45.54,
     },
     "EV / Intelligent Night (00-05 @ 7p)": {
@@ -99,8 +99,8 @@ def init_state():
     defaults = {
         "preset_name": "Octopus 3-Tier (Screenshot)",
         "use_exact_pdf": True,
-        "base_pre_apr": 21.93,
-        "base_post_apr": 19.38,
+        "base_pre_apr": 25.60,
+        "base_post_apr": 25.60,
         "base_sc": 45.54,
         "shift_w1_pct": 0.0,
         "shift_w4_pct": 0.0,
@@ -121,8 +121,8 @@ def apply_preset_callback():
 def reset_all_callback():
     st.session_state["preset_name"] = "Octopus 3-Tier (Screenshot)"
     st.session_state["use_exact_pdf"] = True
-    st.session_state["base_pre_apr"] = 21.93
-    st.session_state["base_post_apr"] = 19.38
+    st.session_state["base_pre_apr"] = 25.60
+    st.session_state["base_post_apr"] = 25.60
     st.session_state["base_sc"] = 45.54
     st.session_state["shift_w1_pct"] = 0.0
     st.session_state["shift_w4_pct"] = 0.0
